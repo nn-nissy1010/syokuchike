@@ -95,7 +95,8 @@ cur = conn.cursor()
 cur.execute("""
 CREATE TABLE IF NOT EXISTS notebooks (
     id TEXT PRIMARY KEY,
-    title TEXT NOT NULL
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL
 )
 """)
 cur.execute("""
@@ -164,10 +165,10 @@ def fixed_header(title):
 
     st.markdown(f"""
     <div id="nb-header">
-        <a href="?page=home" style="text-decoration:none;">
-            <img src="../img/Gemini_Generated_Image_6ikhsk6ikhsk6ikh.png">
+        <a href="?page=home" target="_self" style="text-decoration:none;">
+            <img src="https://github.com/nn-nissy1010/syokuchike/blob/main/img/Gemini_Generated_Image_6ikhsk6ikhsk6ikh.png?raw=true">
         </a>
-        <span class="nb-title">職人名: {title}</span>
+        <span class="nb-title">{title}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -175,17 +176,19 @@ def fixed_header(title):
 # HOME PAGE
 # -----------------------------------------------------
 def page_home():
-    fixed_header("職人クラウド")
-    st.title("職人一覧")
-
+    fixed_header("職人知見クラウド")
+    st.markdown(
+    "<h1 style='font-size:28px; margin-bottom: 0.5rem;'>職人一覧</h1>",
+    unsafe_allow_html=True
+    )
     cur.execute("""
         SELECT
             n.id,
             n.title,
             (SELECT COUNT(*) FROM files f WHERE f.notebook_id = n.id) AS source_count,
-            (SELECT MAX(created_at) FROM chat_messages c WHERE c.notebook_id = n.id) AS updated_at
+            n.created_at AS updated_at
         FROM notebooks n
-        ORDER BY updated_at DESC
+        ORDER BY n.created_at DESC
     """)
     notebooks = cur.fetchall()
 
@@ -329,12 +332,12 @@ def upload_ui():
         }
 
         [data-testid="stFileUploaderDropzone"] div div::after {
-            content: "ドラッグ＆ドロップ またはボタンから選択";
+            content: "ボタンから選択";
             display: block;
             font-size: 13px;
             opacity: 0.7;
             margin-top: 4px;
-            text-align: center;
+            text-align: left;
         }
 
         /* もともとのテキストは全部消す */
@@ -524,7 +527,11 @@ def page_create():
             return
 
         nb_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO notebooks (id, title) VALUES (?,?)", (nb_id, title))
+        now = datetime.now().isoformat(timespec="seconds")
+        cur.execute(
+            "INSERT INTO notebooks (id, title, created_at) VALUES (?,?,?)",
+            (nb_id, title, now)
+        )
         conn.commit()
 
         folder = f"data/notebooks/{nb_id}"
@@ -642,6 +649,14 @@ def page_chat_welcome(nb_id):
         """, (str(uuid.uuid4()), nb_id, "assistant", reply))
         conn.commit()
 
+        # ★ ここで notebooks.created_at を「最後のアクティビティ時刻」として更新
+        now = datetime.now().isoformat(timespec="seconds")
+        cur.execute(
+            "UPDATE notebooks SET created_at = ? WHERE id = ?",
+            (now, nb_id)
+        )
+        conn.commit()
+
         st.query_params.update({"page": "chat", "nb": nb_id})
         st.rerun()
 
@@ -690,8 +705,15 @@ def page_chat_main(nb_id):
         """, (str(uuid.uuid4()), nb_id, "assistant", reply))
         conn.commit()
 
-        st.rerun()
+        # ★ ここでも更新
+        now = datetime.now().isoformat(timespec="seconds")
+        cur.execute(
+            "UPDATE notebooks SET created_at = ? WHERE id = ?",
+            (now, nb_id)
+        )
+        conn.commit()
 
+        st.rerun()
 
 # -----------------------------------------------------
 # Router
