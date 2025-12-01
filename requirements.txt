@@ -1,0 +1,7 @@
+streamlit
+streamlit_js_eval
+langchain
+langchain-core
+langchain-community
+langchain-google-genai
+sqlite-utils
